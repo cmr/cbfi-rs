@@ -185,10 +185,18 @@ fn main() {
             Inc => state[pointer] += (insn.count % 256) as u8,
             Dec => state[pointer] -= (insn.count % 256) as u8,
 
-            Out => { stdout.write_u8(state[pointer]); },
-            In  => state[pointer] = match stdin.read_u8() {
-                Ok(b) => b,
-                Err(_) => 0
+            Out => {
+                for _ in range(0, insn.count) {
+                    stdout.write_u8(state[pointer]);
+                }
+            },
+            In  => {
+                for _ in range(0, insn.count) {
+                    state[pointer] = match stdin.read_u8() {
+                        Ok(b) => b,
+                        Err(_) => 0
+                    }
+                }
             },
 
             FJump => if state[pointer] == 0 { idx = insn.count },
