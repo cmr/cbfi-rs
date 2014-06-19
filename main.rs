@@ -182,8 +182,8 @@ fn main() {
             Left  => pointer -= insn.count,
             Right => pointer += insn.count,
 
-            Inc => state[pointer] += (insn.count % 256) as u8,
-            Dec => state[pointer] -= (insn.count % 256) as u8,
+            Inc => state[pointer] += insn.count as u8,
+            Dec => state[pointer] -= insn.count as u8,
 
             Out => {
                 for _ in range(0, insn.count) {
