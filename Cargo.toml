@@ -1,0 +1,9 @@
+[package]
+
+name = "cbfi"
+version = "1.0.0"
+authors = ["Corey Richardson <corey@octayn.net"]
+
+[[bin]]
+
+name = "cbfi"

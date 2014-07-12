@@ -1,11 +1,11 @@
 #![feature(phase)]
-#[phase(syntax, link)] extern crate log;
+#[phase(link, plugin)] extern crate log;
 
 use std::io::File;
 use std::os;
 
 
-#[deriving(Eq, Show)]
+#[deriving(PartialEq, Show)]
 enum Op {
     Left,
     Right,
@@ -103,7 +103,7 @@ fn parse(input: &str) -> Vec<Insn> {
 
         match op {
             FJump => {
-                let mut num_braces = 1;
+                let mut num_braces = 1i32;
                 for j in range(i + 1, prog.len()) {
                     let op2 = prog.get(j).op;
 
@@ -154,7 +154,8 @@ fn reproduce(prog: &[Insn]) {
 }
 
 fn main() {
-    let input = File::open(&Path::new(os::args().get(1).clone())).unwrap().read_to_str().unwrap();
+    let input = File::open(&Path::new(os::args().get(1).clone()))
+        .read_to_string().unwrap();
 
     let mut stdin = std::io::stdio::stdin_raw();
     let mut stdout = std::io::stdout();
