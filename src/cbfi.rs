@@ -1,11 +1,10 @@
-#![feature(phase)]
-#[phase(link, plugin)] extern crate log;
+use std::fs::File;
+use std::io::*;
+use std::env;
 
-use std::io::File;
-use std::os;
+use Op::*;
 
-
-#[deriving(PartialEq, Show)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum Op {
     Left,
     Right,
@@ -18,19 +17,6 @@ enum Op {
 }
 
 impl Op {
-    fn to_char(&self) -> char {
-        match *self {
-            Left  => '<',
-            Right => '>',
-            Inc   => '+',
-            Dec   => '-',
-            Out   => '.',
-            In    => ',',
-            FJump => '[',
-            BJump => ']',
-        }
-    }
-
     fn from_char(c: char) -> Option<Op> {
         match c {
             '<' => Some(Left),
@@ -44,26 +30,12 @@ impl Op {
             _   => None
         }
     }
-
-    fn is_jump(&self) -> bool {
-        *self == FJump || *self == BJump
-    }
 }
 
-#[deriving(Show)]
+#[derive(Debug, Clone, Copy)]
 struct Insn {
     op: Op,
-    count: uint
-}
-
-impl Insn {
-    fn num_ops(&self) -> uint {
-        if self.op.is_jump() {
-            1
-        } else {
-            self.count
-        }
-    }
+    count: u32,
 }
 
 fn parse(input: &str) -> Vec<Insn> {
@@ -72,9 +44,7 @@ fn parse(input: &str) -> Vec<Insn> {
     let mut prev = ' ';
     let mut count = 0;
 
-    for c in input.as_slice().chars() {
-        debug!("c = {}, count = {}, prev = {}", c, count, prev);
-
+    for c in input.chars() {
         if c == prev {
             count += 1;
             continue;
@@ -86,7 +56,7 @@ fn parse(input: &str) -> Vec<Insn> {
         };
 
         if op == FJump || op == BJump {
-            for _ in range(0, count) {
+            for _ in 0 .. count {
                 prog.push(Insn { op: op, count: 0 });
             }
         } else {
@@ -98,14 +68,14 @@ fn parse(input: &str) -> Vec<Insn> {
     }
 
     // fix up braces
-    for i in range(0, prog.len()) {
-        let op = prog.get(i).op;
+    for i in 0 .. prog.len() {
+        let op = prog[i].op;
 
         match op {
             FJump => {
                 let mut num_braces = 1i32;
-                for j in range(i + 1, prog.len()) {
-                    let op2 = prog.get(j).op;
+                for j in i + 1 .. prog.len() {
+                    let op2 = prog[j].op;
 
                     match op2 {
                         FJump => num_braces += 1,
@@ -114,8 +84,8 @@ fn parse(input: &str) -> Vec<Insn> {
                     }
 
                     if num_braces == 0 {
-                        prog.get_mut(i).count = j;
-                        prog.get_mut(j).count = i;
+                        prog[i].count = j as u32;
+                        prog[j].count = i as u32;
                         break;
                     }
                 }
@@ -127,81 +97,42 @@ fn parse(input: &str) -> Vec<Insn> {
     prog
 }
 
-fn dump(prog: &[Insn]) {
-    let mut indent = 0;
-    for (idx, i) in prog.iter().enumerate() {
-        match i.op {
-            FJump => {
-                println!("{}: {}{} {}", idx, " ".repeat(indent), '[', i.count);
-                indent += 4;
-                continue
-            }
-            BJump => indent -= 4,
-            _     => { }
-        }
-
-        println!("{}: {}{} {}", idx, " ".repeat(indent), i.op.to_char(), i.count);
-    }
-}
-
-fn reproduce(prog: &[Insn]) {
-    for i in prog.iter() {
-        for _ in range(0, i.num_ops()) {
-            print!("{}", i.op.to_char());
-        }
-    }
-    println!("");
-}
-
 fn main() {
-    let input = File::open(&Path::new(os::args().get(1).clone()))
-        .read_to_string().unwrap();
+    let mut args = env::args();
+    let mut input = String::new();
+    File::open(std::path::PathBuf::from(args.nth(1).unwrap())).unwrap().read_to_string(&mut input).unwrap();
 
-    let mut stdin = std::io::stdio::stdin_raw();
-    let mut stdout = std::io::stdout();
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
 
-    let prog = parse(input.as_slice());
+    let mut stdin = stdin.lock();
+    let mut stdout = stdout.lock();
 
-    if os::getenv("dump").is_some() {
-        dump(prog.as_slice());
-        return;
-    }
+    let prog = parse(&input);
 
-    if os::getenv("repro").is_some() {
-        reproduce(prog.as_slice());
-        return;
-    }
-
-    let mut state = [0u8, ..3000];
-    let mut pointer = 0;
-    let mut idx = 0;
+    let mut state = [0u8; 3000];
+    let mut pointer = 0usize;
+    let mut idx = 0usize;
 
     while idx < prog.len() {
-        let insn = prog.get(idx);
+        let insn = prog[idx];
 
         match insn.op {
-            Left  => pointer -= insn.count,
-            Right => pointer += insn.count,
+            Left  => pointer -= insn.count as usize,
+            Right => pointer += insn.count as usize,
 
             Inc => state[pointer] += insn.count as u8,
             Dec => state[pointer] -= insn.count as u8,
 
             Out => {
-                for _ in range(0, insn.count) {
-                    stdout.write_u8(state[pointer]);
-                }
+                stdout.write(&state[pointer .. pointer + insn.count as usize]).unwrap();
             },
             In  => {
-                for _ in range(0, insn.count) {
-                    state[pointer] = match stdin.read_u8() {
-                        Ok(b) => b,
-                        Err(_) => 0
-                    }
-                }
+                assert!(stdin.read(&mut state[pointer .. pointer + insn.count as usize]).unwrap() == insn.count as usize);
             },
 
-            FJump => if state[pointer] == 0 { idx = insn.count },
-            BJump => if state[pointer] != 0 { idx = insn.count }
+            FJump => if state[pointer] == 0 { idx = insn.count as usize },
+            BJump => if state[pointer] != 0 { idx = insn.count as usize }
         }
 
         idx += 1;
